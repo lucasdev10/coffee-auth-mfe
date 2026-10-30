@@ -7,8 +7,8 @@
     "types": [],
     "paths": {
       "coffee-shared-lib": [
-        "../coffee-shared-lib/dist/coffee-shared/index.d.ts",
-        "../coffee-shared-lib/src/public-api.ts"
+        "../coffee-shared-lib/dist/coffee-shared/types/coffee-shared.d.ts",
+        "../coffee-shared-lib/projects/coffee-shared/src/public-api.ts"
       ]
     }
   },

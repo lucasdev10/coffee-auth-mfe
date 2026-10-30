@@ -1,0 +1,94 @@
+<div class="login-container" role="region" aria-label="Login form">
+  <mat-card class="login-card">
+    <mat-card-header>
+      <mat-card-title id="login-heading">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <span>Login</span>
+      </mat-card-title>
+      <mat-card-subtitle>Log in with your credentials</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (error$ | async) {
+        <div class="error-message" role="alert" aria-live="assertive">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <span>{{ error$ | async }}</span>
+        </div>
+      }
+
+      <form role="form" [attr.aria-labelledby]="'login-heading'">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>E-mail</mat-label>
+          <input
+            matInput
+            type="email"
+            [formField]="loginForm.email"
+            placeholder="your@email.com"
+            aria-required="true"
+            aria-describedby="email-error"
+            autocomplete="email"
+          />
+          <mat-icon matPrefix aria-hidden="true">email</mat-icon>
+          <app-form-error [control]="loginForm.email" id="email-error"></app-form-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Password</mat-label>
+          <input
+            matInput
+            [type]="hidePassword() ? 'password' : 'text'"
+            [formField]="loginForm.password"
+            placeholder="Your password"
+            aria-required="true"
+            aria-describedby="password-error"
+            autocomplete="current-password"
+          />
+          <mat-icon matPrefix aria-hidden="true">lock</mat-icon>
+          <button
+            mat-icon-button
+            matSuffix
+            type="button"
+            (click)="togglePasswordVisibility()"
+            [attr.aria-label]="hidePassword() ? 'Show password' : 'Hide password'"
+            [attr.aria-pressed]="!hidePassword()"
+            tabindex="0"
+          >
+            <mat-icon aria-hidden="true">{{
+              hidePassword() ? 'visibility_off' : 'visibility'
+            }}</mat-icon>
+          </button>
+          <app-form-error [control]="loginForm.password" id="password-error"></app-form-error>
+        </mat-form-field>
+
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          class="full-width submit-button"
+          [disabled]="!canSubmit()"
+          (click)="onSubmit()"
+          aria-label="Submit login form"
+          tabindex="0"
+        >
+          @if (isLoading$ | async) {
+            <mat-spinner diameter="20" aria-hidden="true"></mat-spinner>
+            <span>Logging in...</span>
+          } @else {
+            <span>Login</span>
+          }
+        </button>
+      </form>
+
+      <div class="register-user">
+        <p>Don't have an account?</p>
+        <a [routerLink]="'/auth/register'" aria-label="Sign up for a new account">Sign up</a>
+      </div>
+
+      <div class="demo-credentials" role="complementary" aria-label="Test credentials">
+        <p><strong>Test credentials:</strong></p>
+        <p>Admin: admin&#64;admin.com / admin123</p>
+        <p>User: user&#64;user.com / user123</p>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>
