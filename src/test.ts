@@ -11,9 +11,13 @@ import {
 import { ɵresolveComponentResources as resolveComponentResources } from '@angular/core';
 
 // Resolve external templateUrl and styleUrl before any tests run.
+// We return an empty Response for all URLs — components only need to be "resolved"
+// (i.e., their resources fetched) to be usable in tests; the actual template
+// content is replaced via TestBed.overrideComponent in each spec that needs
+// rendering, so empty content here is intentional.
 beforeAll(async () => {
-  await resolveComponentResources((url: string) =>
-    fetch(url).catch(() => new Response('', { status: 200 })),
+  await resolveComponentResources(() =>
+    Promise.resolve(new Response('', { status: 200 })),
   );
 });
 
