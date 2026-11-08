@@ -1,12 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Observable, of, throwError } from 'rxjs';
 import { EUserRole } from 'coffee-shared-lib';
 import { IAuthResponse } from '../models/auth.model';
 import { AuthRepository } from '../repositories/auth.repository';
+import { EventBusService } from '../services/event-bus.service';
 import { AuthEffects } from './auth.effects';
 import * as AuthActions from './auth.actions';
 import { initialAuthState } from './auth.state';
@@ -44,6 +45,7 @@ describe('AuthEffects', () => {
   let repository: AuthRepository;
   let store: MockStore;
   let router: { navigate: ReturnType<typeof vi.fn> };
+  let eventBus: EventBusService;
 
   beforeEach(async () => {
     router = { navigate: vi.fn() };
@@ -52,6 +54,7 @@ describe('AuthEffects', () => {
       providers: [
         AuthEffects,
         AuthRepository,
+        EventBusService,
         provideMockActions(() => actions$),
         provideMockStore({ initialState: { auth: initialAuthState } }),
         { provide: Router, useValue: router },
@@ -61,6 +64,11 @@ describe('AuthEffects', () => {
     effects = TestBed.inject(AuthEffects);
     repository = TestBed.inject(AuthRepository);
     store = TestBed.inject(MockStore);
+    eventBus = TestBed.inject(EventBusService);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   // ─── Login ────────────────────────────────────────────────────────────────
@@ -144,6 +152,45 @@ describe('AuthEffects', () => {
         });
       });
     });
+
+    it('should emit "auth:login" custom event with user and token on successful login', async () => {
+      vi.spyOn(repository, 'login').mockReturnValue(of(MOCK_AUTH_RESPONSE));
+      const emitSpy = vi.spyOn(eventBus, 'emit');
+      actions$ = of(
+        AuthActions.authLogin({ credentials: { email: 'user@test.com', password: 'user123' } }),
+      );
+
+      await new Promise<void>((resolve) => {
+        effects.login$.subscribe(() => {
+          expect(emitSpy).toHaveBeenCalledWith(
+            'auth:login',
+            expect.objectContaining({
+              user: expect.objectContaining({ id: MOCK_USER.id, email: MOCK_USER.email }),
+              token: MOCK_AUTH_RESPONSE.token,
+            }),
+            'auth-mfe',
+          );
+          resolve();
+        });
+      });
+    });
+
+    it('should NOT emit "auth:login" event on failed login', async () => {
+      vi.spyOn(repository, 'login').mockReturnValue(
+        throwError(() => ({ message: 'Invalid credentials' })),
+      );
+      const emitSpy = vi.spyOn(eventBus, 'emit');
+      actions$ = of(
+        AuthActions.authLogin({ credentials: { email: 'bad@test.com', password: 'wrong' } }),
+      );
+
+      await new Promise<void>((resolve) => {
+        effects.login$.subscribe(() => {
+          expect(emitSpy).not.toHaveBeenCalled();
+          resolve();
+        });
+      });
+    });
   });
 
   // ─── Register ─────────────────────────────────────────────────────────────
@@ -218,6 +265,35 @@ describe('AuthEffects', () => {
         });
       });
     });
+
+    it('should emit "auth:login" custom event with user and token on successful register', async () => {
+      vi.spyOn(repository, 'register').mockReturnValue(of(MOCK_AUTH_RESPONSE));
+      const emitSpy = vi.spyOn(eventBus, 'emit');
+      actions$ = of(
+        AuthActions.authRegister({
+          credentials: {
+            email: 'new@test.com',
+            password: 'pass123',
+            confirmPassword: 'pass123',
+            fullName: 'New User',
+          },
+        }),
+      );
+
+      await new Promise<void>((resolve) => {
+        effects.register$.subscribe(() => {
+          expect(emitSpy).toHaveBeenCalledWith(
+            'auth:login',
+            expect.objectContaining({
+              user: expect.objectContaining({ id: MOCK_USER.id, email: MOCK_USER.email }),
+              token: MOCK_AUTH_RESPONSE.token,
+            }),
+            'auth-mfe',
+          );
+          resolve();
+        });
+      });
+    });
   });
 
   // ─── Logout ───────────────────────────────────────────────────────────────
@@ -274,6 +350,34 @@ describe('AuthEffects', () => {
         effects.logout$.subscribe(() => {
           const dispatchedTypes = storeSpy.mock.calls.map((call) => (call[0] as any).type);
           expect(dispatchedTypes).toContain('[Auth] Logout Success');
+          resolve();
+        });
+      });
+    });
+
+    it('should emit "auth:logout" custom event on successful logout', async () => {
+      vi.spyOn(repository, 'logout').mockReturnValue(of(undefined as void));
+      const emitSpy = vi.spyOn(eventBus, 'emit');
+      actions$ = of(AuthActions.authLogout());
+
+      await new Promise<void>((resolve) => {
+        effects.logout$.subscribe(() => {
+          expect(emitSpy).toHaveBeenCalledWith('auth:logout', {}, 'auth-mfe');
+          resolve();
+        });
+      });
+    });
+
+    it('should emit "auth:logout" custom event even when logout API call fails', async () => {
+      vi.spyOn(repository, 'logout').mockReturnValue(
+        throwError(() => new Error('Network error')),
+      );
+      const emitSpy = vi.spyOn(eventBus, 'emit');
+      actions$ = of(AuthActions.authLogout());
+
+      await new Promise<void>((resolve) => {
+        effects.logout$.subscribe(() => {
+          expect(emitSpy).toHaveBeenCalledWith('auth:logout', {}, 'auth-mfe');
           resolve();
         });
       });

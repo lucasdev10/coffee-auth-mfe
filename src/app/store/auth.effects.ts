@@ -1,10 +1,11 @@
 import { inject, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
-import { EUserRole } from 'coffee-shared-lib';
+import { EUserRole, IUser } from 'coffee-shared-lib';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { catchError, map, of, switchMap, tap } from 'rxjs';
+import { catchError, map, of, switchMap } from 'rxjs';
 import { AuthRepository } from '../repositories/auth.repository';
+import { EventBusService } from '../services/event-bus.service';
 import * as AuthActions from './auth.actions';
 
 /**
@@ -37,6 +38,14 @@ export class AuthEffects {
   private readonly store = inject(Store);
   private readonly router = inject(Router);
 
+  /**
+   * EventBusService injected optionally — at runtime in the full MFE stack the
+   * singleton provided by the Shell App's Module Federation bundle is used.
+   * When running standalone (unit tests, isolated dev), the local implementation
+   * defined in services/event-bus.service.ts is used instead.
+   */
+  private readonly eventBus = inject(EventBusService, { optional: true });
+
   // ─── Login ─────────────────────────────────────────────────────────────────
 
   login$ = createEffect(() =>
@@ -47,6 +56,7 @@ export class AuthEffects {
           map((response) => {
             this.persistToStorage(response.token, response.refreshToken ?? null, response.user);
             this.dispatchGlobalLoginSuccess(response.token, response.refreshToken ?? null, response.user);
+            this.emitAuthLoginEvent(response.user, response.token);
 
             const targetRoute =
               response.user.role === EUserRole.ADMIN ? '/admin' : '/products';
@@ -72,6 +82,7 @@ export class AuthEffects {
           map((response) => {
             this.persistToStorage(response.token, response.refreshToken ?? null, response.user);
             this.dispatchGlobalRegisterSuccess(response.token, response.refreshToken ?? null, response.user);
+            this.emitAuthLoginEvent(response.user, response.token);
             this.router.navigate(['/products']);
             return AuthActions.authRegisterSuccess({ response });
           }),
@@ -95,12 +106,14 @@ export class AuthEffects {
           map(() => {
             this.clearStorage();
             this.dispatchGlobalLogout();
+            this.emitAuthLogoutEvent();
             this.router.navigate(['/auth/login']);
             return AuthActions.authLogoutSuccess();
           }),
           catchError(() => {
             this.clearStorage();
             this.dispatchGlobalLogout();
+            this.emitAuthLogoutEvent();
             this.router.navigate(['/auth/login']);
             return of(AuthActions.authLogoutSuccess());
           }),
@@ -203,5 +216,63 @@ export class AuthEffects {
 
   private dispatchGlobalLogout(): void {
     this.store.dispatch({ type: '[Auth] Logout Success' });
+  }
+
+  // ─── Custom event emission ─────────────────────────────────────────────────
+
+  /**
+   * Emits the "auth:login" custom event on the global window object.
+   *
+   * Used after both successful login and successful registration, since both
+   * operations result in an authenticated session.
+   *
+   * Payload shape (per Requirement 11.7):
+   *   { user: IUser; token: string }
+   *
+   * Requirements: 5.11, 11.4, 11.7, 11.10
+   */
+  private emitAuthLoginEvent(user: IUser, token: string): void {
+    const detail = { user: user as unknown as Record<string, unknown>, token };
+    if (this.eventBus) {
+      this.eventBus.emit('auth:login', detail, 'auth-mfe');
+    } else {
+      window.dispatchEvent(
+        new CustomEvent('auth:login', {
+          detail: {
+            type: 'auth:login',
+            detail,
+            timestamp: Date.now(),
+            source: 'auth-mfe',
+          },
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }
+  }
+
+  /**
+   * Emits the "auth:logout" custom event on the global window object.
+   *
+   * Requirements: 5.11, 11.5, 11.7, 11.10
+   */
+  private emitAuthLogoutEvent(): void {
+    const detail = {};
+    if (this.eventBus) {
+      this.eventBus.emit('auth:logout', detail, 'auth-mfe');
+    } else {
+      window.dispatchEvent(
+        new CustomEvent('auth:logout', {
+          detail: {
+            type: 'auth:logout',
+            detail,
+            timestamp: Date.now(),
+            source: 'auth-mfe',
+          },
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }
   }
 }
