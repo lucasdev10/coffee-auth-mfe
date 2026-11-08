@@ -6,7 +6,13 @@
     "outDir": "./out-tsc/spec",
     "types": [
       "vitest/globals"
-    ]
+    ],
+    "paths": {
+      "coffee-shared-lib": [
+        "../coffee-shared-lib/dist/coffee-shared/types/coffee-shared.d.ts",
+        "../coffee-shared-lib/projects/coffee-shared/src/public-api.ts"
+      ]
+    }
   },
   "include": [
     "src/**/*.d.ts",

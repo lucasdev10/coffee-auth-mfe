@@ -1,44 +1,65 @@
-import { Injectable, signal } from '@angular/core';
-import { Router } from '@angular/router';
-import { inject } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { inject, Injectable } from '@angular/core';
+import { IUser } from 'coffee-shared-lib';
+import { Store } from '@ngrx/store';
+import { Observable } from 'rxjs';
 import { ILoginCredentials, IRegisterCredentials } from '../models/auth.model';
+import { IAuthState } from './auth.state';
+import * as AuthActions from './auth.actions';
+import {
+  selectAuthError,
+  selectAuthIsAuthenticated,
+  selectAuthIsLoading,
+  selectAuthIsAdmin,
+  selectAuthToken,
+  selectAuthUser,
+} from './auth.selectors';
 
 /**
- * AuthFacade - Minimal placeholder for Auth MFE pages.
+ * AuthFacade — public surface for pages to interact with the Auth NgRx store.
  *
- * This facade will be fully implemented in task 7.4 with NgRx store,
- * AuthEffects, global store synchronization, and StorageService persistence.
- * For task 7.3, this provides the interface that LoginPage and RegisterPage
- * depend on so the pages compile correctly.
+ * Pages only reference the facade; they never import store internals directly.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthFacade {
-  private readonly router = inject(Router);
+  private readonly store = inject(Store<{ auth: IAuthState }>);
 
-  private readonly _isLoading = new BehaviorSubject<boolean>(false);
-  private readonly _error = new BehaviorSubject<string | null>(null);
+  // ─── Selectors ─────────────────────────────────────────────────────────────
+  readonly isLoading$: Observable<boolean> = this.store.select(selectAuthIsLoading);
+  readonly error$: Observable<string | null> = this.store.select(selectAuthError);
+  readonly isAuthenticated$: Observable<boolean> = this.store.select(selectAuthIsAuthenticated);
+  readonly isAdmin$: Observable<boolean> = this.store.select(selectAuthIsAdmin);
+  readonly user$: Observable<IUser | null> = this.store.select(selectAuthUser);
+  readonly token$: Observable<string | null> = this.store.select(selectAuthToken);
 
-  readonly isLoading$: Observable<boolean> = this._isLoading.asObservable();
-  readonly error$: Observable<string | null> = this._error.asObservable();
+  // ─── Commands ──────────────────────────────────────────────────────────────
 
+  /** Dispatch login action — AuthEffects will call the repository and persist token. */
   login(credentials: ILoginCredentials): void {
-    // Will be implemented in task 7.4 - dispatches NgRx login action
-    this._isLoading.next(true);
-    this._error.next(null);
-    console.warn('AuthFacade.login: NgRx integration pending (task 7.4)', credentials);
+    this.store.dispatch(AuthActions.authLogin({ credentials }));
   }
 
+  /** Dispatch register action — AuthEffects will call the repository and persist token. */
   register(credentials: IRegisterCredentials): void {
-    // Will be implemented in task 7.4 - dispatches NgRx register action
-    this._isLoading.next(true);
-    this._error.next(null);
-    console.warn('AuthFacade.register: NgRx integration pending (task 7.4)', credentials);
+    this.store.dispatch(AuthActions.authRegister({ credentials }));
   }
 
+  /** Dispatch logout action — AuthEffects will clear storage and redirect. */
   logout(): void {
-    // Will be implemented in task 7.4
-    this._error.next(null);
-    this.router.navigate(['/auth/login']);
+    this.store.dispatch(AuthActions.authLogout());
+  }
+
+  /** Update token (e.g. after a silent refresh from the Shell). */
+  updateToken(token: string, refreshToken?: string): void {
+    this.store.dispatch(AuthActions.authUpdateToken({ token, refreshToken }));
+  }
+
+  /** Trigger hydration from localStorage (called on MFE bootstrap). */
+  hydrate(): void {
+    this.store.dispatch(AuthActions.authHydrate());
+  }
+
+  /** Clear any displayed error message. */
+  clearError(): void {
+    this.store.dispatch(AuthActions.authClearError());
   }
 }
